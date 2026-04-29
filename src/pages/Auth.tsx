@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Shield, ArrowRight, Brain } from 'lucide-react';
+import { Shield, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -35,12 +35,12 @@ export default function AuthPage() {
     if (user && !authLoading) {
       const userRole = user.user_metadata?.role || role;
       if (userRole === 'doctor') {
-        navigate('/provider-access', { replace: true });
+        navigate('/portal/doctor/access', { replace: true });
       } else if (patient) {
-        const origin = (location.state as any)?.from?.pathname || '/dashboard';
+        const origin = (location.state as any)?.from?.pathname || '/portal/patient/dashboard';
         navigate(origin, { replace: true });
       } else if (patient === null) {
-        navigate('/onboarding', { replace: true });
+        navigate('/portal/patient/onboarding', { replace: true });
       }
     }
   }, [user, patient, authLoading, navigate, location, role]);

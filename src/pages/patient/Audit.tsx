@@ -32,7 +32,7 @@ export default function AuditTrail() {
   return (
     <div className="container mx-auto px-6 py-10">
       <div className="mb-12">
-        <Link to="/dashboard" className="inline-flex items-center gap-2 text-slate-500 hover:text-white transition-colors mb-6 text-sm font-medium">
+        <Link to="/portal/patient/dashboard" className="inline-flex items-center gap-2 text-slate-500 hover:text-white transition-colors mb-6 text-sm font-medium">
           <ArrowLeft className="w-4 h-4" /> Back to Dashboard
         </Link>
         <h1 className="text-4xl font-bold font-display tracking-tight text-white">AXON Neural Audit Trail</h1>

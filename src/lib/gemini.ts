@@ -1,12 +1,22 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 // AXON Intelligence: Official Key Ingestion
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+const getAI = () => {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn("VITE_GEMINI_API_KEY is missing. AI features will be disabled.");
+    return null;
+  }
+  return new GoogleGenAI({ apiKey });
+};
+
+const ai = getAI();
 
 /**
  * Unified generation helper
  */
 export async function generateContent(model: string, contents: any, config?: any) {
+  if (!ai) throw new Error("AI client not initialized. Check VITE_GEMINI_API_KEY.");
   const response = await ai.models.generateContent({
     model,
     contents,
@@ -19,9 +29,10 @@ export async function generateContent(model: string, contents: any, config?: any
  * Extracts structured medical data from an image/PDF using Gemini Flash.
  */
 export async function extractMedicalData(base64Data: string, mimeType: string) {
+  if (!ai) throw new Error("AI client not initialized");
   try {
     const result = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview", // Use Pro to handle PDFs better
+      model: "gemini-2.0-flash", // Updated to stable flash model
       contents: [
         {
           inlineData: {
@@ -60,11 +71,12 @@ export async function extractMedicalData(base64Data: string, mimeType: string) {
  * Synthesizes a longitudinal medical history into a clinical summary for doctors.
  */
 export async function synthesizeLongitudinalHistory(records: any[]) {
+  if (!ai) throw new Error("AI client not initialized");
   try {
     const recordsText = JSON.stringify(records, null, 2);
     
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-2.0-flash",
       contents: `You are a brilliant medical orchestrator AI. Analyze these longitudinal patient records over time. RECORDS: ${recordsText} Synthesize these past records to find trends. Highlight chronic risks, medication history changes, and treatment-response patterns.`,
       config: {
         responseMimeType: "application/json",
@@ -105,13 +117,14 @@ export async function synthesizeLongitudinalHistory(records: any[]) {
  * Agent 1: Ingestion Agent
  */
 export async function ingestionAgent(rawText: string) {
+  if (!ai) throw new Error("AI client not initialized");
   try {
     const prompt = `You are an expert Medical Registrar. Extract structured data from this medical document text.
     TEXT: ${rawText}
     Focus on: Diagnoses, Medications (name, dose, freq), Lab Results, and Provider.`;
 
     const result = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.0-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -153,6 +166,11 @@ export async function ingestionAgent(rawText: string) {
  * AXON Vitality Agent
  */
 export async function vitalityAgent(profile: any) {
+  if (!ai) return { 
+    vitality_score: 75, 
+    explanation: "AI assessment unavailable (Missing API Key).", 
+    improvement_areas: ["Hydration optimization", "Sleep consistency", "Regular activity"] 
+  };
   try {
     const prompt = `Act as a senior clinical analyst for AXON. 
     Calculate a 'Health Vitality Score' (0-100) based on the following weighted algorithm:
@@ -166,7 +184,7 @@ export async function vitalityAgent(profile: any) {
     Output exactly JSON with vitality_score, detailed_explanation, and 3 specific improvement_areas.`;
 
     const result = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.0-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -196,11 +214,12 @@ export async function vitalityAgent(profile: any) {
  * Agent: Risk Agent
  */
 export async function riskAgent(records: any[]) {
+  if (!ai) return { risk_level: 'low', conditions: [], confidence: 0, reasoning: "AI assessment unavailable" };
   const prompt = `Review these medical records for chronic risk factors.
   RECORDS: ${JSON.stringify(records)}`;
 
   const result = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-2.0-flash",
     contents: prompt,
     config: {
       responseMimeType: "application/json",
@@ -223,18 +242,8 @@ export async function riskAgent(records: any[]) {
  * Chat with AXON
  */
 export async function chatWithAxon(messages: any[], userQuery: string) {
+  if (!ai) throw new Error("AI client not initialized");
   try {
-    const aiChat = ai.chats.create({
-      model: "gemini-3.1-pro-preview",
-      config: {
-        systemInstruction: "You are AXON, an advanced, privacy-preserving medical AI clinical assistant. Your role is to assist the user (doctor or patient) with their clinical history, answer health questions factually based strictly on their records, and provide clinical insights in a crisp, professional manner. Keep responses concise and well-structured.",
-      }
-    });
-    
-    // Convert previous messages to correct generic structure? No, `@google/genai` creates a chat session.
-    // If we have history, we might need to pass it or just stringify the history into a prompt for a single turn if chat session is hard to hydrate.
-    // Wait, let's just use generateContent with the full history as "contents".
-    
     const contents = messages.map(m => ({
       role: m.role === 'user' ? 'user' : 'model',
       parts: [{ text: m.text }]
@@ -246,7 +255,7 @@ export async function chatWithAxon(messages: any[], userQuery: string) {
     });
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-2.0-flash",
       contents: contents,
       config: {
         systemInstruction: "You are AXON, an advanced clinical assistant AI. Provide crisp, professional, and well-structured responses focusing on clinical relevance."
@@ -261,12 +270,13 @@ export async function chatWithAxon(messages: any[], userQuery: string) {
 }
 
 export async function summaryAgent(patient: any, records: any[]) {
+  if (!ai) return "AI summary unavailable.";
   const prompt = `Provide a professional 3-sentence clinical executive summary for a doctor.
   Patient: ${JSON.stringify(patient)}
   History: ${JSON.stringify(records)}`;
 
   const result = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-2.0-flash",
     contents: prompt
   });
   return result.text.trim();
