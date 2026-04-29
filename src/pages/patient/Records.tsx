@@ -130,7 +130,7 @@ export default function PatientRecords() {
                          <span className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded font-medium">{data?.providerName || "General"}</span>
                        </div>
                        
-                       <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100 font-serif leading-relaxed italic">
+                       <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100 font-serif leading-relaxed">
                          "{data?.keyFindings || "No structured findings available."}"
                        </p>
                        

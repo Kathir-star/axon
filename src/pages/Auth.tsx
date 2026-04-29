@@ -6,30 +6,44 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Button, GlassCard, Input } from '../components/ui';
 import toast from 'react-hot-toast';
+import { clsx } from 'clsx';
 
 export default function AuthPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, patient, loading: authLoading } = useAuth();
+  const { user, patient, loading: authLoading, signUp } = useAuth();
   
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [role, setRole] = useState<'patient' | 'doctor'>(
+    (new URLSearchParams(location.search).get('role') as 'patient' | 'doctor') || 'patient'
+  );
+
+  // Sync role with query param if it changes
+  useEffect(() => {
+    const searchRole = new URLSearchParams(location.search).get('role');
+    if (searchRole === 'patient' || searchRole === 'doctor') {
+      setRole(searchRole);
+    }
+  }, [location.search]);
 
   // Handle successful login redirect
   useEffect(() => {
     if (user && !authLoading) {
-      if (patient) {
+      const userRole = user.user_metadata?.role || role;
+      if (userRole === 'doctor') {
+        navigate('/provider-access', { replace: true });
+      } else if (patient) {
         const origin = (location.state as any)?.from?.pathname || '/dashboard';
         navigate(origin, { replace: true });
       } else if (patient === null) {
-        // Redirection to onboarding handled by ProtectedRoute, but we can be explicit here
         navigate('/onboarding', { replace: true });
       }
     }
-  }, [user, patient, authLoading, navigate, location]);
+  }, [user, patient, authLoading, navigate, location, role]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,15 +55,8 @@ export default function AuthPage() {
         if (error) throw error;
         toast.success("Successfully logged in");
       } else {
-        const { error } = await supabase.auth.signUp({ 
-          email, 
-          password,
-          options: {
-            data: { full_name: name }
-          }
-        });
-        if (error) throw error;
-        toast.success("Account created! Check your email.");
+        await signUp(email, password, name, role);
+        toast.success("Account created successfully!");
       }
     } catch (err: any) {
       toast.error(err.message || "Auth failed");
@@ -61,7 +68,13 @@ export default function AuthPage() {
   if (authLoading && user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white">
-        <div className="h-12 w-12 animate-spin border-4 border-brand-blue border-t-transparent rounded-full" />
+        <motion.img 
+          src="https://i.ibb.co/Cpsv0qY7/73024ef0-7fe4-4884-96b1-58af0a49ff7c.png" 
+          alt="AXON Logo" 
+          className="h-16 opacity-50"
+          animate={{ opacity: [0.3, 0.6, 0.3], scale: [0.95, 1, 0.95] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+        />
       </div>
     );
   }
@@ -78,17 +91,54 @@ export default function AuthPage() {
         transition={{ duration: 0.4 }}
         className="w-full max-w-md z-10"
       >
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center p-4 bg-brand-blue/10 rounded-2xl mb-4 border border-brand-blue/20">
-            <Brain className="w-8 h-8 text-brand-blue" />
-          </div>
-          <h2 className="text-4xl font-bold font-display tracking-tight text-white italic">
-            AXON
-          </h2>
+        <div className="text-center mb-10">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className="flex items-center justify-center mb-6"
+          >
+            <motion.img 
+              src="https://i.ibb.co/Cpsv0qY7/73024ef0-7fe4-4884-96b1-58af0a49ff7c.png" 
+              alt="AXON Logo" 
+              className="w-[90px] md:w-[140px] lg:w-[160px] object-contain mx-auto"
+              whileHover={{ scale: 1.05 }}
+              transition={{ duration: 0.2 }}
+            />
+          </motion.div>
           <p className="text-slate-400 mt-4 font-light">
             {isLogin ? 'Securely access your clinical memory layer.' : 'Initialize your intelligence-driven clinical profile.'}
           </p>
         </div>
+
+        <div className="flex gap-4 mb-3">
+          <button 
+            onClick={() => setRole('patient')}
+            className={clsx(
+              "flex-1 py-3 rounded-xl border transition-all text-sm font-bold uppercase tracking-wider",
+              role === 'patient' 
+                ? "bg-brand-blue/10 border-brand-blue/30 text-brand-blue shadow-[0_0_15px_rgba(52,144,220,0.1)]" 
+                : "bg-white/5 border-white/5 text-slate-500 hover:text-slate-300"
+            )}
+          >
+            I am a Patient
+          </button>
+          <button 
+            onClick={() => setRole('doctor')}
+            className={clsx(
+              "flex-1 py-3 rounded-xl border transition-all text-sm font-bold uppercase tracking-wider",
+              role === 'doctor' 
+                ? "bg-brand-purple/10 border-brand-purple/30 text-brand-purple shadow-[0_0_15px_rgba(168,85,247,0.1)]" 
+                : "bg-white/5 border-white/5 text-slate-500 hover:text-slate-300"
+            )}
+          >
+            I am a Doctor
+          </button>
+        </div>
+        
+        <p className="text-[10px] text-slate-500 uppercase tracking-widest text-center mb-8 font-bold">
+          {role === 'patient' ? "Secure your neural clinical history & get your Doctor's Key" : "Access patient clinical memories with authorized encryption keys"}
+        </p>
 
         <GlassCard className="p-8 border-white/10">
           <form className="space-y-6" onSubmit={handleAuth}>

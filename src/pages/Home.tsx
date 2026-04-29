@@ -1,42 +1,50 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Activity, Shield, Brain, Zap, Clock, ClipboardList, ArrowRight, Github, Twitter, Linkedin } from 'lucide-react';
 import { Button, GlassCard } from '../components/ui';
+import { useAuth } from '../context/AuthContext';
+import { ThreeBackground } from '../components/ThreeBackground';
 
 const Home = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col min-h-screen relative overflow-hidden bg-transparent">
+      <ThreeBackground />
+      
       {/* Hero Section */}
-      <section className="relative pt-20 pb-32 overflow-hidden">
-        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-brand-blue/20 blur-[100px] rounded-full" />
-        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-96 h-96 bg-brand-purple/20 blur-[100px] rounded-full" />
+      <section className="relative pt-32 pb-40">
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-[700px] h-[700px] bg-brand-blue/10 blur-[140px] rounded-full pointer-events-none" />
         
         <div className="container mx-auto px-6 relative z-10 text-center">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
+            transition={{ duration: 1, ease: "easeOut" }}
           >
-            <Badge variant="info">Intelligence That Connects Your Health</Badge>
-            <h1 className="mt-8 text-5xl md:text-8xl font-sans font-extrabold tracking-tight">
+            <Badge variant="info">Intelligence That Respects Your History</Badge>
+            <h1 className="mt-8 text-7xl md:text-[9rem] font-sans font-extrabold tracking-tight leading-[0.9]">
               AXON <br />
-              <span className="text-gradient">Health. Connected.</span>
+              <span className="text-gradient text-4xl md:text-6xl block mt-6 font-display">Universal Health Memory.</span>
             </h1>
-            <p className="mt-8 text-xl text-slate-400 max-w-2xl mx-auto font-light leading-relaxed">
-              AXON is the neural-inspired patient memory layer. Where fragmented health data flows 
-              intelligently into a unified, AI-driven longitudinal record.
+            <p className="mt-12 text-xl md:text-2xl text-slate-400 max-w-3xl mx-auto font-light leading-relaxed">
+              AXON connects your fragmented records into a single, intelligent vault 
+              that stays with you forever. Your data. Your control. Secure and simple.
             </p>
             
-            <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link to="/login">
-                <Button size="lg" className="w-full sm:w-auto h-16 px-10 text-lg">
-                  Patient Portal Access
+            <div className="mt-16 flex flex-col sm:flex-row items-center justify-center gap-6">
+              <Link to="/login?role=patient" className="w-full sm:w-auto">
+                <Button size="lg" className="w-full h-20 px-14 text-xl shadow-[0_0_30px_rgba(52,144,220,0.3)] group uppercase tracking-widest">
+                  Patient Portal
+                  <ArrowRight className="ml-3 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
-              <Link to="/provider-access">
-                <Button variant="outline" size="lg" className="w-full sm:w-auto h-16 px-10 text-lg">
-                  Provider Access Portal
+              <Link to="/login?role=doctor" className="w-full sm:w-auto">
+                <Button variant="outline" size="lg" className="w-full h-20 px-14 text-xl border-white/10 hover:bg-white/5 group uppercase tracking-widest">
+                  Doctor Login
+                  <ArrowRight className="ml-3 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
             </div>
@@ -45,27 +53,28 @@ const Home = () => {
       </section>
 
       {/* Feature Pulse Section */}
-      <section className="py-24 border-t border-white/5 bg-slate-950/20">
+      <section className="py-40 border-t border-white/5 bg-slate-950/40 relative z-10 backdrop-blur-3xl">
         <div className="container mx-auto px-6">
-          <div className="text-center mb-20">
-            <h2 className="text-3xl font-bold font-display">The AXON Intelligence Framework</h2>
+          <div className="text-center mb-32">
+            <h2 className="text-5xl md:text-6xl font-bold font-display tracking-tight text-white">The Health Network Reinvented</h2>
+            <p className="text-slate-500 mt-6 text-xl font-light">Breaking data silos with neural patient-centric architecture.</p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
             <ProblemCard 
-              icon={<Shield className="w-8 h-8 text-brand-blue" />}
-              title="Secure Access Layer"
-              description="Zero-trust architecture utilizing 6-digit ephemeral vault codes for provider entry."
+              icon={<Shield className="w-10 h-10 text-brand-blue" />}
+              title="Doctor's Key"
+              description="Doctors only access your vault when you provide a 6-digit Doctor's Key. Access is temporary and fully auditable."
             />
             <ProblemCard 
-              icon={<Brain className="w-8 h-8 text-brand-purple" />}
-              title="Intelligence Engine"
-              description="A multi-agent neural chain that synthesizes records into a Point-of-Care Summary."
+              icon={<Brain className="w-10 h-10 text-brand-purple" />}
+              title="My Health Vault"
+              description="A permanent, clinical-grade profile that follows you from birth. No more lost records or repeated tests."
             />
             <ProblemCard 
-              icon={<Activity className="w-8 h-8 text-brand-cyan" />}
-              title="Vitality Hub"
-              description="Live calculation of your Health Vitality Score based on real-time clinical markers."
+              icon={<Activity className="w-10 h-10 text-brand-cyan" />}
+              title="Intelligence Brief"
+              description="Our AI agents synthesize years of clinical history into high-fidelity briefs for point-of-care efficiency."
             />
           </div>
         </div>
@@ -118,10 +127,12 @@ const Home = () => {
       <footer className="py-12 border-t border-white/5 bg-slate-950/40">
         <div className="container mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex items-center gap-2">
-            <div className="bg-gradient-brand p-1.5 rounded-lg">
-              <Activity className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-2xl font-bold font-display tracking-tight">AXON</span>
+            <motion.img 
+               src="https://i.ibb.co/Cpsv0qY7/73024ef0-7fe4-4884-96b1-58af0a49ff7c.png" 
+               alt="AXON Logo" 
+               className="w-[90px] md:w-[120px] object-contain" 
+               whileHover={{ scale: 1.05 }}
+            />
           </div>
           
           <div className="flex gap-8 text-sm text-slate-500 font-medium">

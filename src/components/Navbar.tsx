@@ -6,7 +6,7 @@ import { Button } from './ui';
 import { motion, AnimatePresence } from 'motion/react';
 
 const Navbar = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isDoctor } = useAuth();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
@@ -14,30 +14,40 @@ const Navbar = () => {
     <nav className="fixed top-0 left-0 right-0 z-50 glass-morphism-header h-16 flex items-center">
       <div className="container mx-auto px-6 flex items-center justify-between">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 group">
-          <div className="bg-gradient-brand p-1.5 rounded-lg group-hover:scale-110 transition-transform">
-            <Activity className="w-6 h-6 text-white" />
-          </div>
-          <span className="text-3xl font-bold font-display tracking-tight text-white italic">AXON</span>
+        <Link to={user ? (isDoctor ? "/provider-access" : "/dashboard") : "/"} className="flex items-center gap-2 group p-4 -ml-4">
+          <motion.div
+            animate={{ 
+              opacity: [0.8, 1, 0.8],
+              filter: ["drop-shadow(0 0 2px rgba(52,144,220,0.1))", "drop-shadow(0 0 12px rgba(52,144,220,0.4))", "drop-shadow(0 0 2px rgba(52,144,220,0.1))"]
+            }}
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <img src="https://i.ibb.co/Cpsv0qY7/73024ef0-7fe4-4884-96b1-58af0a49ff7c.png" alt="AXON Logo" className="h-12 object-contain" />
+          </motion.div>
         </Link>
 
         {/* Desktop Links */}
         <div className="hidden md:flex items-center gap-8 font-sans">
-          <NavLink to="/" className={({ isActive }) => `text-xs font-bold uppercase tracking-widest transition-colors ${isActive ? 'text-brand-blue' : 'text-slate-400 hover:text-white'}`}>
+          <NavLink to="/" className={({ isActive }) => `text-[10px] font-bold uppercase tracking-[0.2em] transition-colors ${isActive ? 'text-brand-blue' : 'text-slate-400 hover:text-white'}`}>
             Memory Layer
           </NavLink>
-          <NavLink to="/architecture" className={({ isActive }) => `text-xs font-bold uppercase tracking-widest transition-colors ${isActive ? 'text-brand-blue' : 'text-slate-400 hover:text-white'}`}>
-            AXON Architecture
+          <NavLink to="/architecture" className={({ isActive }) => `text-[10px] font-bold uppercase tracking-[0.2em] transition-colors ${isActive ? 'text-brand-blue' : 'text-slate-400 hover:text-white'}`}>
+            Architecture
           </NavLink>
-          <NavLink to="/provider-access" className={({ isActive }) => `text-xs font-bold uppercase tracking-widest transition-colors ${isActive ? 'text-brand-blue' : 'text-slate-400 hover:text-white'}`}>
-            Clinical View
+          <NavLink to="/provider-access" className={({ isActive }) => `text-[10px] font-bold uppercase tracking-[0.2em] transition-colors ${isActive ? 'text-brand-blue' : 'text-slate-400 hover:text-white'}`}>
+            Provider Access
           </NavLink>
         </div>
 
         {/* Auth Actions */}
         <div className="hidden md:flex items-center gap-4">
           {user ? (
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              <Link to="/dashboard">
+                <Button size="sm" variant="outline" className="text-[10px] uppercase font-bold tracking-widest h-9 border-brand-blue/30 text-brand-blue hover:bg-brand-blue hover:text-white">
+                  Health Hub
+                </Button>
+              </Link>
               <button 
                 onClick={() => signOut()}
                 className="p-2 border border-white/5 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
@@ -48,7 +58,7 @@ const Navbar = () => {
             </div>
           ) : (
             <Link to="/login">
-              <Button size="sm" className="gap-2">
+              <Button size="sm" className="gap-2 text-[10px] uppercase font-bold tracking-widest h-9">
                 Patient Login <ArrowRight className="w-3 h-3" />
               </Button>
             </Link>

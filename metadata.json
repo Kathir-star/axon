@@ -1,6 +1,6 @@
 {
-  "name": "AXON: Intelligence That Connects Your Health",
-  "description": "A futuristic patient memory layer where health data flows intelligently, powered by neural-inspired AI orchestration.",
+  "name": "AXON - Patient Memory Layer",
+  "description": "Secure, AI-powered health history hub. Your longitudinal medical memory, accessible via a unique Doctor's Key.",
   "requestFramePermissions": [
     "camera"
   ],

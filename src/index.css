@@ -20,13 +20,22 @@
 
 body {
   font-family: var(--font-sans);
-  background-color: #020617;
-  background-image: radial-gradient(circle at top right, #0f172a, #020617);
-  color: #f8fafc;
+  background-color: #0A0F1C; /* Deep space/medical dark theme */
+  color: #E2E8F0;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 /* Glassmorphism Classes */
+.glass-panel {
+  background: rgba(17, 25, 40, 0.6);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
 @utility glass-morphism {
   @apply backdrop-blur-md bg-white/5 border border-white/10 rounded-2xl;
 }

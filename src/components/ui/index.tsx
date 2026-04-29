@@ -22,9 +22,9 @@ interface GlassCardProps {
 export const GlassCard = ({ children, className, hover = true }: GlassCardProps) => {
   return (
     <motion.div
-      whileHover={hover ? { scale: 1.01, backgroundColor: 'rgba(255, 255, 255, 0.08)' } : {}}
+      whileHover={hover ? { scale: 1.01 } : {}}
       className={cn(
-        "glass-morphism p-6 transition-all duration-300",
+        "glass-morphism p-6 transition-all duration-300 hover:bg-white/8 hover:border-white/20",
         className
       )}
     >
@@ -111,16 +111,17 @@ export const Input = ({ label, error, className, ...props }: InputProps) => {
 /**
  * Badge Component
  */
-export const Badge = ({ children, variant = 'info' }: { children: React.ReactNode, variant?: 'info' | 'success' | 'warning' | 'error' }) => {
+export const Badge = ({ children, variant = 'info', className }: { children: React.ReactNode, variant?: 'info' | 'success' | 'warning' | 'error' | 'outline', className?: string }) => {
   const styles = {
     info: "bg-blue-500/10 text-blue-400 border-blue-500/20",
     success: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
     warning: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-    error: "bg-red-500/10 text-red-400 border-red-500/20"
+    error: "bg-red-500/10 text-red-400 border-red-500/20",
+    outline: "bg-transparent text-slate-400 border-white/10"
   };
 
   return (
-    <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border", styles[variant])}>
+    <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border", styles[variant], className)}>
       {children}
     </span>
   );

@@ -1,34 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plus, 
   Search, 
-  Calendar, 
+  UploadCloud,
   FileText, 
-  Upload,
   Activity,
-  Filter,
   ArrowUpRight,
   MoreVertical,
-  CheckCircle2,
-  Clock,
-  ShieldCheck
+  Beaker,
+  Pill,
+  Stethoscope,
+  X,
+  Send,
+  Loader2,
+  Calendar
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { MedicalRecord } from '../../types';
-import { GlassCard, Button, Badge, Input } from '../../components/ui';
+import { GlassCard, Button, Badge } from '../../components/ui';
 import { useDropzone } from 'react-dropzone';
-import { ingestionAgent } from '../../lib/geminiClient';
+import { extractMedicalData, chatWithAxon } from '../../lib/gemini';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 
 export default function Vault() {
-  const { user, patient } = useAuth();
+  const { user, patient, refreshProfile } = useAuth();
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState('All Records');
+  
+  const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
 
   useEffect(() => {
     if (patient) loadRecords();
@@ -40,9 +44,11 @@ export default function Vault() {
       .from('medical_records')
       .select('*')
       .eq('patient_id', patient!.id)
-      .order('date', { ascending: false });
+      .order('created_at', { ascending: false });
     
-    if (!error) setRecords(data);
+    if (!error) {
+      setRecords(data);
+    }
     setLoading(false);
   };
 
@@ -50,191 +56,419 @@ export default function Vault() {
     setUploading(true);
     try {
       for (const file of acceptedFiles) {
-        // Log Initial State
-        const tempId = Math.random().toString(36).substring(7);
-        
-        // 1. Storage Upload Placeholder
+        // 1. Supabase Storage Upload
+        const fileExt = file.name.split('.').pop();
         const fileName = `${patient?.id}/${Date.now()}-${file.name}`;
+        const mimeType = file.type || 'application/octet-stream';
+        
         const { error: storageError } = await supabase.storage
-          .from('health-vault')
+          .from('medical-reports')
           .upload(fileName, file);
 
-        // 2. Immediate Background Processing Hook
-        // For production logic, we call the ingestAgent which represents our Gemini Agent
-        const mockText = `[OCR STREAM] MEDICAL RECORD: ${file.name}. Patient ID: ${patient?.id}. Date: ${new Date().toISOString()}. Clinical Observations extracted via AXON Agent.`;
+        if (storageError) throw storageError;
         
-        const structured = await ingestionAgent(mockText);
+        const { data: { publicUrl } } = supabase.storage
+          .from('medical-reports')
+          .getPublicUrl(fileName);
+
+        // 2. AI Ingestion Pipeline
+        const reader = new FileReader();
+        const base64Data = await new Promise<string>((resolve) => {
+          reader.onload = (e) => resolve((e.target?.result as string).split(',')[1]);
+          reader.readAsDataURL(file);
+        });
+        
+        const structured = await extractMedicalData(base64Data, mimeType);
         
         const { data, error } = await supabase
           .from('medical_records')
           .insert([{
             patient_id: patient!.id,
-            type: structured.type || 'note',
+            type: structured.type || 'General',
             title: structured.title || file.name,
             date: structured.date || new Date().toISOString().split('T')[0],
-            provider: structured.provider || 'Generic System Ingestion',
-            data: structured,
-            raw_content: mockText,
-            source_path: fileName
+            provider: structured.provider || 'Ingested Document',
+            data: {},
+            file_url: publicUrl,
+            source_path: fileName,
+            summary_json: {
+              snippet: structured.snippet,
+              keyFindings: structured.keyFindings,
+              followUp: structured.followUp
+            }
           }])
           .select()
           .single();
         
         if (error) throw error;
-        setRecords(prev => [data, ...prev]);
-        toast.success(`Ingested: ${structured.title || file.name}`);
         
         await supabase.from('audit_logs').insert([{
-          patient_id: patient!.id,
-          action: 'VAULT_MEMORY_STORED',
-          actor_email: user?.email!,
-          resource_id: data.id
+           patient_id: patient!.id,
+           action_type: 'DOC_UPLOAD_AND_INGESTION',
+           performed_by: user?.id,
+           ip_address: '127.0.0.1',
+           details: { file: file.name, document_id: data.id }
         }]);
+        
+        // Refresh records to show new timeline entry
+        setRecords(prev => [data, ...prev]);
+        toast.success(`Successfully Analyzed: ${structured.title || file.name}`);
       }
+      
+      // Update vitality score based on new timeline entries
+      const { vitalityAgent } = await import('../../lib/gemini');
+      const updatedProfile = await vitalityAgent(patient);
+      
+      const { error: updateError } = await supabase
+        .from('patients')
+        .update({
+          health_vitality_score: updatedProfile.vitality_score,
+          health_score_explanation: updatedProfile.explanation,
+          improvement_areas: updatedProfile.improvement_areas
+        })
+        .eq('id', patient.id);
+        
+      if (!updateError) {
+         await refreshProfile(); 
+      }
+      
     } catch (err: any) {
-      console.error("Ingestion failed:", err);
-      toast.error(err.message || "Cloud ingestion failed");
+      console.error("Upload failed:", err);
+      toast.error(err.message || "Upload failed");
     } finally {
       setUploading(false);
     }
   };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop });
+  const { getRootProps, getInputProps } = useDropzone({ onDrop, maxSize: 10485760 });
+
+  const filters = ['All Records', 'Diagnoses', 'Labs', 'Medications', 'Treatments'];
 
   return (
     <div className="container mx-auto px-6 py-10">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10 border-b border-white/5 pb-8">
         <div>
-          <h1 className="text-4xl font-bold font-display tracking-tight text-white underline decoration-brand-blue/30 decoration-4 underline-offset-8">AXON Clinical Vault</h1>
-          <p className="text-slate-400 mt-4 tracking-wide">Your secured neural-longitudinal health record repository.</p>
+           <h1 className="text-4xl font-bold font-display tracking-tight text-white flex items-center gap-3">
+             <Activity className="w-8 h-8 text-brand-blue" />
+             <span className="underline decoration-brand-blue/30 decoration-4 underline-offset-8">AXON Clinical Vault</span>
+           </h1>
+           <p className="text-slate-400 mt-4 tracking-wide font-light">Your immutable, chronological health memory layer.</p>
         </div>
         
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="relative flex-1 md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            <input 
-              placeholder="Search vault..." 
-              className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:outline-hidden focus:border-brand-blue"
-            />
-          </div>
-          <Button className="gap-2 shrink-0" {...getRootProps()}>
-            <Plus className="w-4 h-4" /> Add Record
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <Button className="gap-2 h-14 px-8 shadow-lg shadow-brand-blue/20" {...getRootProps()}>
+            <UploadCloud className="w-5 h-5" /> Upload File
             <input {...getInputProps()} />
           </Button>
         </div>
       </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* Sidebar Filters */}
-        <div className="lg:col-span-1 space-y-6">
-          <GlassCard className="p-4">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4 px-2">Record Filters</h3>
-            <div className="space-y-1">
-              <FilterItem label="All Records" count={records.length} active={filter === 'all'} onClick={() => setFilter('all')} />
-              <FilterItem label="Diagnoses" active={filter === 'diagnosis'} onClick={() => setFilter('diagnosis')} />
-              <FilterItem label="Lab Reports" active={filter === 'lab_report'} onClick={() => setFilter('lab_report')} />
-              <FilterItem label="Medications" active={filter === 'medication'} onClick={() => setFilter('medication')} />
-              <FilterItem label="Treatments" active={filter === 'treatment'} onClick={() => setFilter('treatment')} />
-            </div>
-          </GlassCard>
+      <div className="flex gap-4 mb-10 overflow-x-auto pb-4 scrollbar-hide">
+         {filters.map(f => (
+           <button 
+             key={f}
+             onClick={() => setFilter(f)}
+             className={`shrink-0 px-6 py-2.5 rounded-full text-sm font-semibold transition-all border ${filter === f ? 'bg-brand-blue text-white border-brand-blue/50 shadow-[0_0_15px_rgba(56,189,248,0.3)]' : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white hover:bg-white/5'}`}
+           >
+             {f}
+           </button>
+         ))}
+      </div>
 
-          <GlassCard className="p-4 bg-emerald-500/5 border-emerald-500/20">
-            <div className="flex items-center gap-2 text-emerald-400 mb-2">
-              <ShieldCheck className="w-4 h-4" />
-              <span className="text-xs font-bold uppercase tracking-widest">Integrity Check</span>
-            </div>
-            <p className="text-[10px] text-slate-400 uppercase font-mono">Status: All Records Encrypted & Verified</p>
-          </GlassCard>
-        </div>
-
-        {/* List */}
-        <div className="lg:col-span-3 space-y-4">
-          <AnimatePresence>
+      <div className="relative max-w-4xl">
+         {/* Timeline vertical line */}
+         <div className="absolute left-6 md:left-24 top-0 bottom-0 w-px bg-gradient-to-b from-brand-blue/50 via-white/10 to-transparent" />
+         
+         <AnimatePresence>
             {uploading && (
               <motion.div 
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="p-4 glass-card border-brand-blue/30 bg-brand-blue/5 flex items-center justify-between"
+                initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                className="relative flex gap-6 md:gap-12 mb-8"
               >
-                <div className="flex items-center gap-3">
-                  <div className="h-4 w-4 animate-spin border-2 border-brand-blue border-t-transparent rounded-full" />
-                  <span className="text-sm font-medium text-brand-blue">AI Ingestion Agent is processing your data...</span>
+                <div className="hidden md:flex w-16 shrink-0 flex-col items-end pt-2">
+                  <div className="h-4 w-12 bg-white/5 rounded animate-pulse" />
                 </div>
-                <Badge variant="info">Syncing</Badge>
+                <div className="absolute left-6 md:left-24 -ml-2 top-3 w-4 h-4 rounded-full bg-slate-900 border-2 border-brand-blue/50 flex items-center justify-center">
+                  <Loader2 className="w-3 h-3 text-brand-blue animate-spin" />
+                </div>
+                <GlassCard className="flex-1 p-6 relative ml-12 md:ml-0 bg-brand-blue/5 border-brand-blue/20">
+                   <div className="flex items-center gap-3">
+                     <span className="text-sm font-medium text-brand-blue">AXON parsing document...</span>
+                   </div>
+                </GlassCard>
               </motion.div>
             )}
-          </AnimatePresence>
-
-          {records.length > 0 ? (
-            records
-              .filter(r => filter === 'all' || r.type === filter)
-              .map(record => (
-              <VaultItem key={record.id} record={record} />
-            ))
-          ) : !loading && (
-            <div className="text-center py-20 glass-card">
-              <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
-                <FileText className="w-8 h-8 text-slate-700" />
-              </div>
-              <h3 className="text-xl font-bold">Your Vault is Empty</h3>
-              <p className="text-slate-500 mt-2">Initialize your memory layer by uploading your first record.</p>
-              <Button variant="outline" className="mt-6" {...getRootProps()}>
-                Upload First File
-                <input {...getInputProps()} />
-              </Button>
-            </div>
-          )}
-        </div>
+         </AnimatePresence>
+         
+         <div className="space-y-8">
+           {records
+             .filter(r => {
+               if (filter === 'All Records') return true;
+               if (filter === 'Diagnoses') return r.type === 'Diagnosis';
+               if (filter === 'Labs') return r.type === 'Lab Report';
+               if (filter === 'Medications') return r.type === 'Medication';
+               if (filter === 'Treatments') return r.type === 'Treatment';
+               return true;
+             })
+             .map((record, index) => (
+             <TimelineNode key={record.id} record={record} onClick={() => setSelectedRecord(record)} />
+           ))}
+           
+           {!loading && records.length === 0 && (
+             <div className="ml-12 md:ml-36 p-10 glass-card text-center relative z-10">
+               <FileText className="w-10 h-10 text-slate-600 mx-auto mb-4" />
+               <h3 className="text-lg font-bold text-slate-300">No records found.</h3>
+               <p className="text-sm text-slate-500 mt-2">Upload a lab report or prescription to start your timeline.</p>
+             </div>
+           )}
+         </div>
       </div>
+
+      <AnimatePresence>
+        {selectedRecord && (
+          <DeepDiveModal record={selectedRecord} onClose={() => setSelectedRecord(null)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-const FilterItem = ({ label, count, active, onClick }: { label: string, count?: number, active?: boolean, onClick: () => void }) => (
-  <button 
-    onClick={onClick}
-    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition-all ${active ? 'bg-brand-blue/10 text-brand-blue' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-  >
-    <span>{label}</span>
-    {count !== undefined && <span className="text-xs bg-white/5 px-2 py-0.5 rounded-lg border border-white/5">{count}</span>}
-  </button>
-);
+// Map types to visually distinct colors
+const getTypeColor = (type: string) => {
+  switch (type) {
+    case 'Diagnosis': return 'text-purple-400 bg-purple-400/10 border-purple-400/20';
+    case 'Lab Report': return 'text-blue-400 bg-blue-400/10 border-blue-400/20';
+    case 'Medication': return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
+    case 'Treatment': return 'text-amber-400 bg-amber-400/10 border-amber-400/20';
+    default: return 'text-slate-300 bg-white/5 border-white/10';
+  }
+}
 
-const VaultItem = ({ record }: { record: MedicalRecord }) => (
-  <GlassCard className="p-5 hover:border-white/20 group">
-    <div className="flex items-start justify-between gap-4">
-      <div className="flex items-start gap-4">
-        <div className="p-3 bg-white/5 rounded-2xl group-hover:bg-brand-blue/10 transition-all">
-          <FileText className="w-6 h-6 text-slate-400 group-hover:text-brand-blue" />
-        </div>
-        <div>
-          <div className="flex items-center gap-3">
-            <h4 className="text-lg font-bold">{record.title}</h4>
-            <Badge variant="info">{record.type}</Badge>
-          </div>
-          <div className="flex items-center gap-4 mt-1 text-sm text-slate-500">
-            <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> {format(new Date(record.date), 'MMM d, yyyy')}</span>
-            <span className="w-1 h-1 bg-slate-700 rounded-full" />
-            <span className="flex items-center gap-1.5"><Activity className="w-3.5 h-3.5" /> {record.provider}</span>
-          </div>
-          {record.data?.summary && (
-            <p className="mt-4 text-xs text-slate-400 leading-relaxed max-w-2xl bg-white/2 p-3 rounded-lg border border-white/5">
-              {record.data.summary}
-            </p>
-          )}
-        </div>
+const getTypeIcon = (type: string) => {
+  switch (type) {
+    case 'Diagnosis': return <Stethoscope className="w-3.5 h-3.5" />;
+    case 'Lab Report': return <Beaker className="w-3.5 h-3.5" />;
+    case 'Medication': return <Pill className="w-3.5 h-3.5" />;
+    case 'Treatment': return <Activity className="w-3.5 h-3.5" />;
+    default: return <FileText className="w-3.5 h-3.5" />;
+  }
+}
+
+const TimelineNode = ({ record, onClick }: { record: MedicalRecord, onClick: () => void }) => {
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="relative flex gap-6 md:gap-12 group cursor-pointer"
+      onClick={onClick}
+    >
+      {/* Date on the left (Desktop) */}
+      <div className="hidden md:flex w-16 shrink-0 flex-col items-end pt-3">
+        <span className="text-xs font-bold text-slate-400 group-hover:text-brand-blue transition-colors">
+          {format(new Date(record.created_at), 'MMM d')}
+        </span>
+        <span className="text-[10px] text-slate-600">
+          {format(new Date(record.created_at), 'yyyy')}
+        </span>
       </div>
-      <div className="flex flex-col items-end gap-3">
-        <button className="p-2 text-slate-600 hover:text-white transition-colors">
-          <MoreVertical className="w-5 h-5" />
-        </button>
-        <div className="flex items-center gap-1.5 text-xs font-mono text-emerald-400/70">
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          VERIFIED
+
+      {/* Node Dot */}
+      <div className="absolute left-6 md:left-24 -ml-[5px] top-4 w-[10px] h-[10px] rounded-full bg-brand-blue border-[2px] border-slate-950 shadow-[0_0_10px_rgba(56,189,248,0.5)] z-10 group-hover:scale-150 transition-transform duration-300" />
+
+      {/* Card */}
+      <GlassCard className="flex-1 p-5 md:p-6 relative ml-12 md:ml-0 group-hover:-translate-y-1 transition-all duration-300 group-hover:shadow-[0_8px_30px_rgba(0,0,0,0.5)] group-hover:border-brand-blue/30">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <Badge className={`px-2 py-0.5 rounded-md flex items-center gap-1.5 ${getTypeColor(record.type)}`}>
+                 {getTypeIcon(record.type)}
+                 {record.type}
+              </Badge>
+              <span className="text-[10px] text-slate-500 font-mono tracking-widest uppercase">{record.provider}</span>
+            </div>
+            <h3 className="text-lg font-bold text-slate-200 group-hover:text-white transition-colors">{record.title}</h3>
+            
+            {/* The AI Snippet */}
+            {record.summary_json && record.summary_json.snippet && (
+              <div className="mt-4 p-3 bg-white/5 rounded-lg border border-white/5 flex gap-3 text-sm">
+                 <Activity className="w-4 h-4 text-brand-blue shrink-0 mt-0.5" />
+                 <p className="text-slate-300 italic">{record.summary_json.snippet}</p>
+              </div>
+            )}
+             {/* Mobile date */}
+             <div className="md:hidden mt-4 text-[10px] font-bold tracking-widest uppercase text-slate-500">
+               {format(new Date(record.created_at), 'MMM d, yyyy')}
+             </div>
+          </div>
+          
+          <div className="shrink-0 flex items-center text-xs font-bold text-brand-blue uppercase tracking-widest gap-1 opactiy-0 group-hover:opacity-100 transition-opacity mt-4 sm:mt-0">
+             Deep Dive <ArrowUpRight className="w-4 h-4" />
+          </div>
         </div>
-      </div>
+      </GlassCard>
+    </motion.div>
+  )
+}
+
+const DeepDiveModal = ({ record, onClose }: { record: MedicalRecord, onClose: () => void }) => {
+  const [chatInput, setChatInput] = useState('');
+  const [chatHistory, setChatHistory] = useState<{role: string, text: string}[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
+
+  const summary = record.summary_json;
+
+  const handleChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isTyping) return;
+    
+    const query = chatInput;
+    const newHistory = [...chatHistory, { role: 'user', text: query }];
+    setChatHistory(newHistory);
+    setChatInput('');
+    setIsTyping(true);
+
+    try {
+      const messages = [
+        { role: 'model', text: `Here is the record context: Title: ${record.title}, Type: ${record.type}. AI Summary: ${JSON.stringify(summary)}` },
+        ...newHistory
+      ];
+      const response = await chatWithAxon(messages, query);
+      setChatHistory(prev => [...prev, { role: 'model', text: response }]);
+    } catch (err) {
+      setChatHistory(prev => [...prev, { role: 'model', text: 'Error connecting to AXON.' }]);
+    } finally {
+       setIsTyping(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        className="w-full max-w-5xl max-h-[90vh] bg-slate-900 border border-brand-blue/30 rounded-3xl shadow-[0_0_50px_rgba(52,144,220,0.15)] flex flex-col md:flex-row overflow-hidden"
+      >
+         {/* Left Side: Document Preview & Info */}
+         <div className="w-full md:w-[40%] bg-slate-950 border-r border-white/5 flex flex-col items-center justify-center relative p-8">
+            <h2 className="text-xl font-bold mb-2 text-center">{record.title}</h2>
+            <div className="flex gap-2 mb-8">
+              <Badge variant="outline" className="border-brand-blue/30 text-brand-blue bg-brand-blue/5">
+                {record.type}
+              </Badge>
+              <Badge variant="outline" className="border-white/10 text-slate-400">
+                <Calendar className="w-3 h-3 mr-1" /> {format(new Date(record.created_at), 'MMM d, yyyy')}
+              </Badge>
+            </div>
+            
+            {record.file_url ? (
+              <a 
+                href={record.file_url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="w-full max-w-xs group relative overflow-hidden rounded-2xl border-2 border-dashed border-white/10 bg-white/5 hover:border-brand-blue/50 hover:bg-brand-blue/5 transition-all text-center p-12 cursor-pointer flex flex-col items-center"
+              >
+                <FileText className="w-16 h-16 text-slate-600 group-hover:text-brand-blue mb-4 transition-colors" />
+                <span className="font-bold text-slate-300 group-hover:text-white transition-colors">View Original Document</span>
+                <span className="text-[10px] text-slate-500 uppercase tracking-widest mt-2 block">Opens in new tab</span>
+              </a>
+            ) : (
+              <div className="p-12 text-center opacity-50">
+                 <FileText className="w-16 h-16 mx-auto mb-4" />
+                 <p>No document attached</p>
+              </div>
+            )}
+            
+            <button 
+              onClick={onClose}
+              className="absolute top-4 right-4 md:hidden p-2 bg-white/10 rounded-full text-slate-300 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+         </div>
+         
+         {/* Right Side: AXON Analysis */}
+         <div className="w-full md:w-[60%] flex flex-col h-[60vh] md:h-auto">
+            <div className="flex justify-between items-center p-6 border-b border-brand-blue/20 bg-brand-blue/5">
+               <div className="flex items-center gap-3">
+                 <Activity className="w-5 h-5 text-brand-blue" />
+                 <h3 className="font-bold text-lg text-brand-blue tracking-tight">AXON Intelligence Report</h3>
+               </div>
+               <button onClick={onClose} className="hidden md:flex p-2 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
+                 <X className="w-5 h-5" />
+               </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+               {/* Key Findings */}
+               <div>
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3 ml-1">Key Findings</h4>
+                  <ul className="space-y-2">
+                     {summary?.keyFindings && summary.keyFindings.length > 0 ? summary.keyFindings.map((finding: string, i: number) => (
+                       <li key={i} className="flex gap-3 text-sm text-slate-300 items-start bg-white/5 p-3 rounded-xl border border-white/5">
+                         <div className="w-1.5 h-1.5 rounded-full bg-brand-blue mt-2 shrink-0" />
+                         <span className="leading-relaxed">{finding}</span>
+                       </li>
+                     )) : (
+                       <li className="text-sm text-slate-500">No specific findings parsed.</li>
+                     )}
+                  </ul>
+               </div>
+
+               {/* Follow Up */}
+               <div>
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3 ml-1 mt-6">Follow-Up Suggestions</h4>
+                  <ul className="space-y-2">
+                     {summary?.followUp && summary.followUp.length > 0 ? summary.followUp.map((tip: string, i: number) => (
+                       <li key={i} className="flex gap-3 text-sm text-slate-300 items-start bg-amber-500/5 p-3 rounded-xl border border-amber-500/10">
+                         <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-2 shrink-0" />
+                         <span className="leading-relaxed text-amber-200/80">{tip}</span>
+                       </li>
+                     )) : (
+                       <li className="text-sm text-slate-500">No specific follow-up actions flagged.</li>
+                     )}
+                  </ul>
+               </div>
+               
+               {/* Contextual Ask AXON */}
+               <div className="mt-8 pt-8 border-t border-white/10">
+                 <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2">
+                   <Activity className="w-4 h-4" /> Ask AXON about this record
+                 </h4>
+                 
+                 <div className="space-y-3 mb-4">
+                   {chatHistory.map((m, idx) => (
+                     <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`text-sm p-3 rounded-2xl max-w-[85%] ${m.role === 'user' ? 'bg-brand-blue text-white rounded-tr-sm' : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-tl-sm'}`}>
+                          {m.text}
+                        </div>
+                     </div>
+                   ))}
+                 </div>
+                 
+                 <form onSubmit={handleChat} className="flex gap-2">
+                   <input 
+                      type="text" 
+                      placeholder="e.g., What does this specific value mean?" 
+                      className="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-hidden focus:border-brand-blue/50"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      disabled={isTyping}
+                   />
+                   <button 
+                     type="submit" 
+                     disabled={!chatInput.trim() || isTyping}
+                     className="w-12 flex items-center justify-center bg-brand-blue text-white rounded-xl hover:bg-blue-500 disabled:opacity-50 transition-colors"
+                   >
+                     {isTyping ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 -ml-0.5" />}
+                   </button>
+                 </form>
+               </div>
+            </div>
+         </div>
+      </motion.div>
     </div>
-  </GlassCard>
-);
+  );
+}
+
