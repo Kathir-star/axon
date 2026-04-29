@@ -151,8 +151,8 @@ export default function Dashboard() {
       try {
         // Run AI synthesis in background without re-blocking main loading state
         const [sum, risk] = await Promise.all([
-          summaryAgent(patient, data),
-          riskAgent(data)
+          (summaryAgent ? summaryAgent(patient, data) : Promise.resolve("AI summary unavailable")),
+          (riskAgent ? riskAgent(data) : Promise.resolve({ risk_level: 'low', conditions: [], confidence: 0, reasoning: "AI assessment unavailable" }))
         ]);
         setSummary(sum);
         setRiskInsight(risk);
@@ -179,7 +179,7 @@ export default function Dashboard() {
           <p className="text-slate-400 mt-2 font-light">Overview of your medical longitudinal memory and AI-driven insights.</p>
         </div>
         <div className="flex items-center gap-4 w-full md:w-auto">
-          <Link to="/access">
+          <Link to="/portal/patient/access">
             <Button variant="outline" className="w-full md:w-auto gap-2 h-14 border-white/10">
               <Settings className="w-4 h-4" /> Security & Access Center
             </Button>
@@ -334,7 +334,7 @@ export default function Dashboard() {
                 <Activity className="w-5 h-5 text-brand-cyan" />
                 <h3 className="font-bold tracking-tight">Baseline Discovery</h3>
               </div>
-              <Link to="/onboarding" className="text-[10px] font-bold text-slate-500 hover:text-white uppercase tracking-widest">Edit</Link>
+              <Link to="/portal/patient/onboarding" className="text-[10px] font-bold text-slate-500 hover:text-white uppercase tracking-widest">Edit</Link>
             </div>
             <div className="space-y-6">
                <MetaGroup label="Core Indicators" items={[

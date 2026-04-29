@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
 
 export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading, patient } = useAuth();
+  const { user, loading, patient, isDoctor } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -25,17 +25,18 @@ export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ childr
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Handle onboarding requirement: If no patient profile exists and not already on onboarding
-  const isOnOnboarding = location.pathname === '/onboarding';
-  const hasProfile = !!patient;
+  // Handle onboarding requirement for patients
+  if (!isDoctor) {
+    const isOnOnboarding = location.pathname === '/portal/patient/onboarding';
+    const hasProfile = !!patient;
 
-  if (!hasProfile && !isOnOnboarding) {
-    return <Navigate to="/onboarding" replace />;
-  }
+    if (!hasProfile && !isOnOnboarding) {
+      return <Navigate to="/portal/patient/onboarding" replace />;
+    }
 
-  // If they HAVE a profile but are trying to go to onboarding, redirect to dashboard
-  if (hasProfile && isOnOnboarding) {
-    return <Navigate to="/dashboard" replace />;
+    if (hasProfile && isOnOnboarding) {
+      return <Navigate to="/portal/patient/dashboard" replace />;
+    }
   }
 
   return <>{children}</>;

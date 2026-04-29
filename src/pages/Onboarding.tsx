@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { User, Activity, ShieldCheck, ArrowRight, Brain, Camera } from 'lucide-react';
+import { User, Activity, ShieldCheck, ArrowRight, Camera } from 'lucide-react';
 import { GlassCard, Button, Input } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -131,7 +131,7 @@ export default function Onboarding() {
 
       if (error) throw error;
       await refreshProfile();
-      navigate('/dashboard');
+      navigate('/portal/patient/dashboard');
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Failed to finalize profile");

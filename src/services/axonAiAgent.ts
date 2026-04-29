@@ -1,10 +1,21 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+const getAI = () => {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn("VITE_GEMINI_API_KEY is missing in axonAiAgent. AI features will be disabled.");
+    return null;
+  }
+  return new GoogleGenAI({ apiKey });
+};
+
+const ai = getAI();
 
 export const generateClinicalRecommendation = async (decryptedPatientContext: any[], userQuery: string) => {
+  if (!ai) return "Error: AI client not initialized. Check VITE_GEMINI_API_KEY.";
+  
   // Use the latest standard production model
-  const model = "gemini-3.1-pro-preview"; 
+  const model = "gemini-2.0-flash"; 
 
   const systemInstruction = `
     You are AXON, an advanced, privacy-preserving medical AI agent.
@@ -34,7 +45,9 @@ export const generateClinicalRecommendation = async (decryptedPatientContext: an
  * High-fidelity synthesis for the Clinical Brief
  */
 export const synthesizeClinicalBrief = async (records: any[]) => {
-  const model = "gemini-3.1-pro-preview";
+  if (!ai) return "Insufficient data to project clinical trajectory (AI unavailable).";
+  
+  const model = "gemini-2.0-flash";
   
   const systemInstruction = `
     You are AXON. Synthesize the longitudinal health history of the patient.

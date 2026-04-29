@@ -1,20 +1,24 @@
 import React from 'react';
-import { NavLink, Link, useNavigate } from 'react-router-dom';
-import { Activity, Menu, X, ArrowRight, LogOut, LayoutDashboard, Shield } from 'lucide-react';
+import { NavLink, Link } from 'react-router-dom';
+import { Menu, X, ArrowRight, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui';
 import { motion, AnimatePresence } from 'motion/react';
 
 const Navbar = () => {
   const { user, signOut, isDoctor } = useAuth();
-  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+
+  const getDashboardLink = () => {
+    if (isDoctor) return "/portal/doctor/access";
+    return "/portal/patient/dashboard";
+  };
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass-morphism-header h-16 flex items-center">
       <div className="container mx-auto px-6 flex items-center justify-between">
         {/* Logo */}
-        <Link to={user ? (isDoctor ? "/provider-access" : "/dashboard") : "/"} className="flex items-center gap-2 group p-4 -ml-4">
+        <Link to={user ? getDashboardLink() : "/"} className="flex items-center gap-2 group p-4 -ml-4">
           <motion.div
             animate={{ 
               opacity: [0.8, 1, 0.8],
@@ -34,7 +38,7 @@ const Navbar = () => {
           <NavLink to="/architecture" className={({ isActive }) => `text-[10px] font-bold uppercase tracking-[0.2em] transition-colors ${isActive ? 'text-brand-blue' : 'text-slate-400 hover:text-white'}`}>
             Architecture
           </NavLink>
-          <NavLink to="/provider-access" className={({ isActive }) => `text-[10px] font-bold uppercase tracking-[0.2em] transition-colors ${isActive ? 'text-brand-blue' : 'text-slate-400 hover:text-white'}`}>
+          <NavLink to="/portal/doctor/access" className={({ isActive }) => `text-[10px] font-bold uppercase tracking-[0.2em] transition-colors ${isActive ? 'text-brand-blue' : 'text-slate-400 hover:text-white'}`}>
             Provider Access
           </NavLink>
         </div>
@@ -43,7 +47,7 @@ const Navbar = () => {
         <div className="hidden md:flex items-center gap-4">
           {user ? (
             <div className="flex items-center gap-3">
-              <Link to="/dashboard">
+              <Link to={getDashboardLink()}>
                 <Button size="sm" variant="outline" className="text-[10px] uppercase font-bold tracking-widest h-9 border-brand-blue/30 text-brand-blue hover:bg-brand-blue hover:text-white">
                   Health Hub
                 </Button>
@@ -82,12 +86,12 @@ const Navbar = () => {
           >
             <Link to="/" onClick={() => setIsMenuOpen(false)} className="text-lg font-medium text-slate-400">Home</Link>
             <Link to="/architecture" onClick={() => setIsMenuOpen(false)} className="text-lg font-medium text-slate-400">Architecture</Link>
-            <Link to="/doctor" onClick={() => setIsMenuOpen(false)} className="text-lg font-medium text-slate-400">For Doctors</Link>
+            <Link to="/portal/doctor/access" onClick={() => setIsMenuOpen(false)} className="text-lg font-medium text-slate-400">For Doctors</Link>
             <div className="h-px bg-white/5 my-2" />
             {user ? (
-              <Link to="/patient" onClick={() => setIsMenuOpen(false)} className="text-lg font-medium text-brand-blue">My Health Dashboard</Link>
+              <Link to={getDashboardLink()} onClick={() => setIsMenuOpen(false)} className="text-lg font-medium text-brand-blue">My Health Dashboard</Link>
             ) : (
-              <Link to="/auth" onClick={() => setIsMenuOpen(false)} className="text-lg font-medium text-brand-blue">Sign In</Link>
+              <Link to="/login" onClick={() => setIsMenuOpen(false)} className="text-lg font-medium text-brand-blue">Sign In</Link>
             )}
           </motion.div>
         )}
